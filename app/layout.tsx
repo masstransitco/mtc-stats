@@ -1,5 +1,6 @@
 import './globals.css';
 import type { ReactNode } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 
 export const metadata = {
   title: 'HK Mobility Data',
@@ -30,6 +31,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </div>
         </header>
         <main className="mx-auto max-w-6xl px-6 py-6">{children}</main>
+        <Analytics />
       </body>
     </html>
   );
