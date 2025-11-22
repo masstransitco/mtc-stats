@@ -195,6 +195,7 @@ export default function ParkingPatternCharts({
                     stroke={DISTRICT_COLORS[idx % DISTRICT_COLORS.length]}
                     strokeWidth={2}
                     dot={false}
+                    connectNulls={true}
                     name={district}
                   />
                 ))}
@@ -256,6 +257,7 @@ export default function ParkingPatternCharts({
                     stroke={DISTRICT_COLORS[idx % DISTRICT_COLORS.length]}
                     strokeWidth={2}
                     dot={false}
+                    connectNulls={true}
                     name={district}
                   />
                 ))}
