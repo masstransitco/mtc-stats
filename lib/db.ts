@@ -211,9 +211,7 @@ export async function getParking5MinTrend() {
 
 export async function getParkingHourlyPattern() {
   const { data, error } = await supabase
-    .from('agg_parking_hourly_pattern')
-    .select('*')
-    .order('hour_of_day', { ascending: true });
+    .rpc('get_parking_hourly_aggregated');
   if (error) throw error;
   return data ?? [];
 }

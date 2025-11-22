@@ -336,31 +336,30 @@ function aggregateByHourDistrict(data: any[], selectedDistricts: string[]) {
     grouped.set(hour, { hour });
   }
 
+  console.log(`Processing ${data.length} rows for districts:`, selectedDistricts);
+
   data.forEach((row) => {
     if (!selectedDistricts.includes(row.district)) return;
 
     const hour = Number(row.hour_of_day);
-
     const existing = grouped.get(hour)!;
-    if (!existing[row.district]) {
-      existing[row.district] = 0;
-      existing[`${row.district}_count`] = 0;
-    }
-    existing[row.district] += Number(row.avg_vacancy || 0);
-    existing[`${row.district}_count`] += 1;
+
+    // RPC function already returns aggregated data with total_avg_vacancy
+    existing[row.district] = Number(row.total_avg_vacancy || 0);
   });
 
-  // Average the values
+  // Convert to array format
   const result = Array.from(grouped.values()).map(entry => {
-    const averaged: any = { hour: entry.hour };
+    const formatted: any = { hour: entry.hour };
     selectedDistricts.forEach(district => {
-      const count = entry[`${district}_count`] || 0;
-      averaged[district] = count > 0 ? Number((entry[district] / count).toFixed(2)) : null;
+      formatted[district] = entry[district] || null;
     });
-    return averaged;
+    return formatted;
   });
 
-  return result.sort((a, b) => a.hour - b.hour);
+  const sorted = result.sort((a, b) => a.hour - b.hour);
+  console.log('Aggregated hourly data:', sorted);
+  return sorted;
 }
 
 function aggregateBy5MinDistrictMetered(data: any[], selectedDistricts: string[]) {
@@ -400,11 +399,12 @@ function aggregateByHourDistrictMetered(data: any[], selectedDistricts: string[]
       existing[row.district] = 0;
       existing[`${row.district}_count`] = 0;
     }
+    // For metered carparks, we average the vacancy rate across vehicle types
     existing[row.district] += Number(row.avg_vacancy_rate || 0);
     existing[`${row.district}_count`] += 1;
   });
 
-  // Average the values
+  // Average the vacancy rates
   const result = Array.from(grouped.values()).map(entry => {
     const averaged: any = { hour: entry.hour };
     selectedDistricts.forEach(district => {
