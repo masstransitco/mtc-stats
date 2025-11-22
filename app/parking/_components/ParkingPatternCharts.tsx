@@ -329,14 +329,15 @@ function aggregateBy5MinDistrict(data: any[], selectedDistricts: string[]) {
 function aggregateByHourDistrict(data: any[], selectedDistricts: string[]) {
   const grouped = new Map<number, any>();
 
+  // Initialize all 24 hours (0-23) with empty data
+  for (let hour = 0; hour < 24; hour++) {
+    grouped.set(hour, { hour });
+  }
+
   data.forEach((row) => {
     if (!selectedDistricts.includes(row.district)) return;
 
     const hour = Number(row.hour_of_day);
-
-    if (!grouped.has(hour)) {
-      grouped.set(hour, { hour });
-    }
 
     const existing = grouped.get(hour)!;
     if (!existing[row.district]) {
@@ -351,8 +352,8 @@ function aggregateByHourDistrict(data: any[], selectedDistricts: string[]) {
   const result = Array.from(grouped.values()).map(entry => {
     const averaged: any = { hour: entry.hour };
     selectedDistricts.forEach(district => {
-      const count = entry[`${district}_count`] || 1;
-      averaged[district] = entry[district] ? Number((entry[district] / count).toFixed(2)) : 0;
+      const count = entry[`${district}_count`] || 0;
+      averaged[district] = count > 0 ? Number((entry[district] / count).toFixed(2)) : null;
     });
     return averaged;
   });
@@ -382,14 +383,15 @@ function aggregateBy5MinDistrictMetered(data: any[], selectedDistricts: string[]
 function aggregateByHourDistrictMetered(data: any[], selectedDistricts: string[]) {
   const grouped = new Map<number, any>();
 
+  // Initialize all 24 hours (0-23) with empty data
+  for (let hour = 0; hour < 24; hour++) {
+    grouped.set(hour, { hour });
+  }
+
   data.forEach((row) => {
     if (!selectedDistricts.includes(row.district)) return;
 
     const hour = Number(row.hour_of_day);
-
-    if (!grouped.has(hour)) {
-      grouped.set(hour, { hour });
-    }
 
     const existing = grouped.get(hour)!;
     if (!existing[row.district]) {
@@ -404,8 +406,8 @@ function aggregateByHourDistrictMetered(data: any[], selectedDistricts: string[]
   const result = Array.from(grouped.values()).map(entry => {
     const averaged: any = { hour: entry.hour };
     selectedDistricts.forEach(district => {
-      const count = entry[`${district}_count`] || 1;
-      averaged[district] = entry[district] ? Number((entry[district] / count).toFixed(2)) : 0;
+      const count = entry[`${district}_count`] || 0;
+      averaged[district] = count > 0 ? Number((entry[district] / count).toFixed(2)) : null;
     });
     return averaged;
   });
