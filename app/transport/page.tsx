@@ -250,7 +250,7 @@ export default async function Transport({ searchParams }: { searchParams: Promis
 
       <section className="rounded-lg border border-slate-200 p-4">
         <div className="mb-2 text-sm font-medium text-slate-600">Operator share ({modeParam}, %)</div>
-        <OperatorShareChart data={shareData} keys={operatorKeys} />
+        <OperatorShareChart data={shareData as Array<{label: string; [key: string]: string | number}>} keys={operatorKeys} />
       </section>
 
       <section className="rounded-lg border border-slate-200 p-4">
