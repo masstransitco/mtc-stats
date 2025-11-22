@@ -58,7 +58,7 @@ function toAnnualSeries(rows: { year: number; avg_daily_ptp: number }[]) {
 
 export default async function Transport({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = await searchParams;
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const chartModeCookie = cookieStore.get('transportChartMode')?.value as 'percent' | 'absolute' | undefined;
 
   const startYear = parseYear(typeof params.startYear === 'string' ? params.startYear : undefined);
@@ -245,7 +245,7 @@ export default async function Transport({ searchParams }: { searchParams: Promis
 
       <section className="rounded-lg border border-slate-200 p-4">
         <div className="mb-2 text-sm font-medium text-slate-600">Operator trend ({modeParam})</div>
-        <OperatorTrendChart data={trendData} keys={operatorKeys} />
+        <OperatorTrendChart data={trendData as Array<{label: string; [key: string]: string | number}>} keys={operatorKeys} />
       </section>
 
       <section className="rounded-lg border border-slate-200 p-4">
