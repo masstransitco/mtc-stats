@@ -56,9 +56,9 @@ type MeteredCarparkPoint = {
   occupancy_rate: number;
 };
 
-function normalize(points: { weight: number }[]) {
+function normalize<T extends { weight: number }>(points: T[]): T[] {
   const max = Math.max(...points.map((p) => p.weight), 1);
-  return points.map((p) => ({ ...p, weight: p.weight / max }));
+  return points.map((p) => ({ ...p, weight: p.weight / max })) as T[];
 }
 
 export default function HeatmapClient({
