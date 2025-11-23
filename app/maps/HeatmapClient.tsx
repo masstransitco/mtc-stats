@@ -605,8 +605,8 @@ export default function HeatmapClient({
     <div className="space-y-3">
       <Script
         id="google-maps"
-        src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=visualization,geometry&v=beta`}
-        strategy="lazyOnload"
+        src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=visualization,geometry&loading=async&v=beta`}
+        strategy="afterInteractive"
         onLoad={() => setReady(true)}
       />
       <div className="flex flex-wrap items-center gap-3 text-sm">
