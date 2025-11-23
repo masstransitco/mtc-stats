@@ -289,7 +289,9 @@ export default function HeatmapClient({
 
   // Initialize map + heat layer once Google scripts are ready
   useEffect(() => {
-    if (!ready || typeof window === 'undefined' || !(window as any).google) return;
+    if (!ready || typeof window === 'undefined') return;
+    const google = (window as any).google;
+    if (!google?.maps?.Map || !google?.maps?.visualization?.HeatmapLayer) return;
     if (!mapRef.current) {
       const center = { lat: 22.32, lng: 114.17 };
       mapRef.current = new google.maps.Map(document.getElementById('heatmap') as HTMLElement, {
@@ -300,11 +302,12 @@ export default function HeatmapClient({
         mapId: process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID,
         disableDefaultUI: true
       });
-      heatRef.current = new google.maps.visualization.HeatmapLayer({
+      const heatLayer = new google.maps.visualization.HeatmapLayer({
         dissipating: true,
         radius: 28
       });
-      heatRef.current.setMap(mapRef.current);
+      heatLayer.setMap(mapRef.current);
+      heatRef.current = heatLayer;
 
       dwellMarkerRef.current = new google.maps.Marker({
         map: mapRef.current,
@@ -605,9 +608,9 @@ export default function HeatmapClient({
     <div className="space-y-3">
       <Script
         id="google-maps"
-        src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=visualization,geometry&loading=async&v=beta`}
+        src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=visualization,geometry&v=beta`}
         strategy="afterInteractive"
-        onLoad={() => setReady(true)}
+        onReady={() => setReady(true)}
       />
       <div className="flex flex-wrap items-center gap-3 text-sm">
         <div className="flex gap-2 rounded-full border border-slate-200 bg-white/80 px-2 py-1 shadow-sm">
