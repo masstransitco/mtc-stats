@@ -143,3 +143,179 @@ where st_distance(
 
 create index if not exists vehicle_dwell_districts_mv_vin_start_idx
   on vehicle_dwell_districts_mv (vin, start_ts);
+
+-- Helper RPC: carpark volatility points with coordinates for mapping
+create or replace function get_carpark_volatility_points(p_limit int default 200)
+returns table (
+  park_id text,
+  park_name text,
+  district text,
+  carpark_type text,
+  lat numeric,
+  lon numeric,
+  stddev_vacancy numeric,
+  avg_vacancy numeric,
+  min_vacancy numeric,
+  max_vacancy numeric
+) language sql stable as $$
+  select
+    a.park_id,
+    a.park_name,
+    a.district,
+    a.carpark_type,
+    c.latitude as lat,
+    c.longitude as lon,
+    a.stddev_vacancy,
+    a.avg_vacancy,
+    a.min_vacancy,
+    a.max_vacancy
+  from agg_busiest_carparks a
+  join carpark_info c on a.park_id = c.park_id
+  where c.latitude is not null and c.longitude is not null
+  order by a.stddev_vacancy desc
+  limit p_limit;
+$$;
+
+-- Metered carpark volatility points (if agg_busiest_metered exists)
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_name = 'agg_busiest_metered') then
+    execute '
+      create or replace function get_metered_volatility_points(p_limit int default 300)
+      returns table (
+        carpark_id text,
+        name text,
+        district text,
+        lat numeric,
+        lon numeric,
+        stddev_vacancy_rate numeric,
+        avg_vacancy_rate numeric,
+        min_vacancy_rate numeric,
+        max_vacancy_rate numeric
+      ) language sql stable as $func$
+        select
+          a.carpark_id,
+          a.name,
+          a.district,
+          m.latitude as lat,
+          m.longitude as lon,
+          a.stddev_vacancy_rate,
+          a.avg_vacancy_rate,
+          a.min_vacancy_rate,
+          a.max_vacancy_rate
+        from agg_busiest_metered a
+        join metered_carpark_info m on a.carpark_id = m.carpark_id
+        where m.latitude is not null and m.longitude is not null
+        order by a.stddev_vacancy_rate desc
+        limit p_limit;
+      $func$;
+    ';
+  end if;
+end $$;
+
+-- District-level carpark volatility (regular + metered if present)
+do $$
+begin
+  perform 1 from information_schema.tables where table_name = 'agg_busiest_metered';
+  if found then
+    execute '
+      create or replace function get_district_parking_heat()
+      returns table (
+        district text,
+        lat numeric,
+        lon numeric,
+        weight numeric,
+        sample_count int
+      ) language sql stable as $func$
+      with regs as (
+        select c.district, c.latitude, c.longitude, b.stddev_vacancy as weight
+        from agg_busiest_carparks b
+        join carpark_info c on b.park_id = c.park_id
+        where c.latitude is not null and c.longitude is not null
+      ),
+      metered as (
+        select m.district, m.latitude, m.longitude, a.stddev_vacancy_rate as weight
+        from agg_busiest_metered a
+        join metered_carpark_info m on a.carpark_id = m.carpark_id
+        where m.latitude is not null and m.longitude is not null
+      ),
+      all_pts as (
+        select * from regs
+        union all
+        select * from metered
+      ),
+      agg as (
+        select
+          district,
+          avg(latitude) as lat,
+          avg(longitude) as lon,
+          sum(weight) as weight,
+          count(*) as sample_count
+        from all_pts
+        group by district
+      )
+      select * from agg;
+      $func$;
+    ';
+  else
+    execute '
+      create or replace function get_district_parking_heat()
+      returns table (
+        district text,
+        lat numeric,
+        lon numeric,
+        weight numeric,
+        sample_count int
+      ) language sql stable as $func$
+      with regs as (
+        select c.district, c.latitude, c.longitude, b.stddev_vacancy as weight
+        from agg_busiest_carparks b
+        join carpark_info c on b.park_id = c.park_id
+        where c.latitude is not null and c.longitude is not null
+      ),
+      agg as (
+        select
+          district,
+          avg(latitude) as lat,
+          avg(longitude) as lon,
+          sum(weight) as weight,
+          count(*) as sample_count
+        from regs
+        group by district
+      )
+      select * from agg;
+      $func$;
+    ';
+  end if;
+end $$;
+
+-- Fleet movement hex binning (last N days, hex size in meters)
+create or replace function get_fleet_hex_heat(p_days int default 1, p_hex_size float default 150.0)
+returns table (
+  hex geometry,
+  weight numeric
+) language plpgsql stable as $$
+declare
+  gsize float := p_hex_size;
+begin
+  return query
+  with pts as (
+    select
+      st_transform(st_setsrid(st_makepoint(lon, lat), 4326), 3857) as g
+    from vehicle_telemetry
+    where ts >= now() - (p_days || ' days')::interval
+      and lat between -90 and 90
+      and lon between -180 and 180
+  ),
+  hexes as (
+    select st_hexagon(g, gsize) as hex
+    from pts
+  ),
+  agg as (
+    select hex, count(*)::numeric as weight
+    from hexes
+    group by hex
+  )
+  select st_transform(hex, 4326) as hex, weight from agg;
+end;
+$$;

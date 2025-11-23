@@ -371,3 +371,152 @@ export async function getHourlyActivity24h() {
   }
   return result;
 }
+
+// Map heat layers
+export type CarparkVolatilityPoint = {
+  park_id: string;
+  park_name: string;
+  district: string | null;
+  lat: number;
+  lon: number;
+  stddev_vacancy: number;
+  avg_vacancy: number;
+  min_vacancy: number;
+  max_vacancy: number;
+};
+
+export async function getCarparkVolatilityPoints(limit = 200) {
+  const { data, error } = await supabase
+    .rpc('get_carpark_volatility_points', { p_limit: limit });
+  if (error) throw error;
+  return (data || []) as CarparkVolatilityPoint[];
+}
+
+export type CarparkHourlyPoint = {
+  park_id: string;
+  park_name: string;
+  district: string | null;
+  carpark_type: string | null;
+  lat: number;
+  lon: number;
+  hour: number; // 0-23 HK time
+  avg_vacancy: number;
+  stddev_vacancy: number;
+  min_vacancy: number;
+  max_vacancy: number;
+  sample_count: number;
+  overall_max_vacancy: number;
+  avg_hourly_stddev: number;
+  occupancy_rate: number; // 0-1, calculated as (max_vacancy - avg_vacancy) / max_vacancy
+};
+
+export async function getCarparkHourlyData(topCarparks = 40) {
+  const { data, error } = await supabase
+    .rpc('get_carpark_hourly_data', { p_top_carparks: topCarparks });
+  if (error) throw error;
+  return (data || []).map((row: any) => ({
+    park_id: row.park_id,
+    park_name: row.park_name,
+    district: row.district,
+    carpark_type: row.carpark_type,
+    lat: Number(row.lat),
+    lon: Number(row.lon),
+    hour: Number(row.hour),
+    avg_vacancy: Number(row.avg_vacancy),
+    stddev_vacancy: Number(row.stddev_vacancy),
+    min_vacancy: Number(row.min_vacancy),
+    max_vacancy: Number(row.max_vacancy),
+    sample_count: Number(row.sample_count),
+    overall_max_vacancy: Number(row.overall_max_vacancy),
+    avg_hourly_stddev: Number(row.avg_hourly_stddev),
+    occupancy_rate: Number(row.occupancy_rate)
+  })) as CarparkHourlyPoint[];
+}
+
+export type MeteredCarparkHourlyPoint = {
+  carpark_id: string;
+  carpark_name: string;
+  district: string | null;
+  lat: number;
+  lon: number;
+  hour: number; // 0-23 HK time
+  avg_vacancy_rate: number; // percentage 0-100
+  stddev_vacancy_rate: number;
+  min_vacancy_rate: number;
+  max_vacancy_rate: number;
+  sample_count: number;
+  overall_max_vacancy_rate: number;
+  avg_hourly_stddev: number;
+  occupancy_rate: number; // 0-1, calculated as (100 - avg_vacancy_rate) / 100
+};
+
+export async function getMeteredCarparkHourlyData(topCarparks = 40) {
+  const { data, error } = await supabase
+    .rpc('get_metered_carpark_hourly_data', { p_top_carparks: topCarparks });
+  if (error) throw error;
+  return (data || []).map((row: any) => ({
+    carpark_id: row.carpark_id,
+    carpark_name: row.carpark_name,
+    district: row.district,
+    lat: Number(row.lat),
+    lon: Number(row.lon),
+    hour: Number(row.hour),
+    avg_vacancy_rate: Number(row.avg_vacancy_rate),
+    stddev_vacancy_rate: Number(row.stddev_vacancy_rate),
+    min_vacancy_rate: Number(row.min_vacancy_rate),
+    max_vacancy_rate: Number(row.max_vacancy_rate),
+    sample_count: Number(row.sample_count),
+    overall_max_vacancy_rate: Number(row.overall_max_vacancy_rate),
+    avg_hourly_stddev: Number(row.avg_hourly_stddev),
+    occupancy_rate: Number(row.occupancy_rate)
+  })) as MeteredCarparkHourlyPoint[];
+}
+
+export type DwellHeatPoint = {
+  vin: string;
+  district: string | null;
+  lat: number;
+  lon: number;
+  start_ts: string;
+  end_ts: string;
+  duration_sec: number;
+};
+
+export async function getDwellHeatPoints(days = 7) {
+  const sinceIso = new Date(Date.now() - days * 24 * 3600 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('vehicle_dwell_districts_mv')
+    .select('vin,district,start_ts,end_ts,duration_sec,center')
+    .gte('start_ts', sinceIso);
+  if (error) throw error;
+  return (data || []).map((row: any) => ({
+    vin: row.vin,
+    district: row.district,
+    start_ts: row.start_ts,
+    end_ts: row.end_ts,
+    duration_sec: Number(row.duration_sec),
+    lat: row.center?.coordinates?.[1] ?? null,
+    lon: row.center?.coordinates?.[0] ?? null
+  })) as DwellHeatPoint[];
+}
+
+export type MovementPoint = {
+  vin: string;
+  ts: string;
+  lat: number;
+  lon: number;
+  speed: number | null;
+};
+
+// Latest 24h movement points; sampled at 1-minute intervals per vehicle
+export async function getRecentMovements24h() {
+  const { data, error } = await supabase.rpc('get_vehicle_movements_24h');
+  if (error) throw error;
+  return (data || []).map((row: any) => ({
+    vin: row.vin,
+    ts: row.ts,
+    lat: Number(row.lat),
+    lon: Number(row.lon),
+    speed: row.speed !== null ? Number(row.speed) : null
+  })) as MovementPoint[];
+}
