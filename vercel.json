@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/refresh-parking",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/refresh-ismart",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

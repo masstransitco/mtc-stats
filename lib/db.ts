@@ -262,3 +262,112 @@ export async function getBusiestCarparks(limit = 20) {
   if (error) throw error;
   return data ?? [];
 }
+
+// Fleet / iSmart telemetry analysis
+export type VehicleStateSummary = {
+  state: string;
+  count: number;
+  total_duration_sec: number;
+};
+
+export async function getVehicleStateSummary() {
+  const { data, error } = await supabase
+    .from('vehicle_state_segments_mv')
+    .select('state,duration_sec');
+  if (error) throw error;
+  const summary = new Map<string, { count: number; total_duration_sec: number }>();
+  for (const row of data || []) {
+    const key = row.state ?? 'Unknown';
+    const current = summary.get(key) ?? { count: 0, total_duration_sec: 0 };
+    current.count += 1;
+    current.total_duration_sec += Number(row.duration_sec);
+    summary.set(key, current);
+  }
+  return Array.from(summary.entries())
+    .map(([state, agg]) => ({ state, ...agg }))
+    .sort((a, b) => b.total_duration_sec - a.total_duration_sec);
+}
+
+export type DwellHotspot = {
+  district: string | null;
+  dwell_minutes: number;
+  events: number;
+};
+
+export async function getDwellHotspots(limit = 10) {
+  const { data, error } = await supabase
+    .from('vehicle_dwell_districts_mv')
+    .select('district,duration_sec');
+  if (error) throw error;
+  const byDistrict = new Map<string, { dwell_minutes: number; events: number }>();
+  for (const row of data || []) {
+    const district = row.district ?? 'Unknown';
+    const agg = byDistrict.get(district) ?? { dwell_minutes: 0, events: 0 };
+    agg.dwell_minutes += Number(row.duration_sec) / 60;
+    agg.events += 1;
+    byDistrict.set(district, agg);
+  }
+  return Array.from(byDistrict.entries())
+    .map(([district, agg]) => ({ district, ...agg }))
+    .sort((a, b) => b.dwell_minutes - a.dwell_minutes)
+    .slice(0, limit);
+}
+
+export type RecentDwell = {
+  vin: string;
+  district: string | null;
+  start_ts: string;
+  end_ts: string;
+  duration_sec: number;
+  radius_m: number | null;
+  dist_m: number | null;
+};
+
+export type HourlyActivity = {
+  vin: string;
+  hour: number; // 0-23 HK time
+  duration_min: number;
+};
+
+export async function getRecentDwells(limit = 30) {
+  const { data, error } = await supabase
+    .from('vehicle_dwell_districts_mv')
+    .select('vin,district,start_ts,end_ts,duration_sec,radius_m,dist_m')
+    .order('start_ts', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data || []).map((row) => ({
+    vin: row.vin,
+    district: row.district,
+    start_ts: row.start_ts,
+    end_ts: row.end_ts,
+    duration_sec: Number(row.duration_sec),
+    radius_m: row.radius_m !== null ? Number(row.radius_m) : null,
+    dist_m: row.dist_m !== null ? Number(row.dist_m) : null
+  })) as RecentDwell[];
+}
+
+export async function getHourlyActivity24h() {
+  const sinceIso = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('vehicle_state_segments_mv')
+    .select('vin,start_ts,duration_sec')
+    .gte('start_ts', sinceIso);
+  if (error) throw error;
+
+  const buckets = new Map<string, number>(); // key vin-hour
+  for (const row of data || []) {
+    const ts = new Date(row.start_ts);
+    const hkHour = (ts.getUTCHours() + 8) % 24;
+    const key = `${row.vin}|${hkHour}`;
+    const current = buckets.get(key) ?? 0;
+    buckets.set(key, current + Number(row.duration_sec) / 60);
+  }
+
+  const result: HourlyActivity[] = [];
+  for (const [key, duration_min] of buckets.entries()) {
+    const [vin, hourStr] = key.split('|');
+    result.push({ vin, hour: Number(hourStr), duration_min });
+  }
+  return result;
+}
