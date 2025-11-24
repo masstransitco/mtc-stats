@@ -22,7 +22,9 @@ export default async function MapsPage() {
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-slate-300">Geospatial pulse</p>
-            <h1 className="text-3xl font-semibold">Live heat: carparks vs MG fleet dwell</h1>
+            <h1 className="text-3xl font-semibold">
+              Live heat: carpark throughput vs trips
+            </h1>
             <p className="mt-2 max-w-3xl text-slate-200">
               Time-based visualizations with progressive rendering. Watch 5 MG vehicles traverse Hong Kong with smooth
               animations, or explore hourly carpark patterns—toggle between volatility and occupancy heat across 24 hours.

@@ -38,7 +38,7 @@ export default async function FleetPage() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.06),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(56,189,248,0.08),transparent_28%)]" />
         <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-sm uppercase tracking-[0.2em] text-slate-300">iSmart Fleet</p>
+            <p className="text-sm uppercase tracking-[0.2em] text-slate-300">MTC Fleet</p>
             <h1 className="text-3xl font-semibold">Live vehicle behaviour and stops</h1>
             <p className="mt-2 max-w-2xl text-slate-200">
               Segmented states, deliberate dwells, and the districts they occur in — refreshed every 15 minutes.

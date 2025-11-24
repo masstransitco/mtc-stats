@@ -73,14 +73,16 @@ export default function HeatmapClient({
   movementPoints: MovementPoint[];
 }) {
   const mapRef = useRef<google.maps.Map>();
-  const heatRef = useRef<google.maps.visualization.HeatmapLayer>();
+  const volatilityHeatRef = useRef<google.maps.visualization.HeatmapLayer>();
+  const occupancyHeatRef = useRef<google.maps.visualization.HeatmapLayer>();
   const dwellMarkerRef = useRef<google.maps.Marker>();
   const movementMarkersRef = useRef<Map<string, google.maps.Marker>>(new Map());
   const movementPolylinesRef = useRef<Map<string, google.maps.Polyline>>(new Map());
   const markerAnimationRef = useRef<Map<string, { from: google.maps.LatLng; to: google.maps.LatLng; startTime: number; duration: number }>>(new Map());
   const animationFrameRef = useRef<number>();
   const [mode, setMode] = useState<'carparks' | 'metered' | 'movements'>('carparks');
-  const [carparkMetric, setCarparkMetric] = useState<'volatility' | 'occupancy'>('volatility');
+  const [enabledMetrics, setEnabledMetrics] = useState({ volatility: true, occupancy: false });
+  const [showTrails, setShowTrails] = useState(true);
   const [progressHour, setProgressHour] = useState<number>(24); // 0 = 24h ago, 24 = now
   const [isPlaying, setIsPlaying] = useState(false);
   const [ready, setReady] = useState(false);
@@ -198,8 +200,8 @@ export default function HeatmapClient({
     return result;
   }, [mode, progressHour, movementsByVin, startWindow]);
 
-  // Build heatmap payloads with time-based filtering
-  const carparkPayload = useMemo(() => {
+  // Build heatmap payloads with time-based filtering - Volatility
+  const carparkVolatilityPayload = useMemo(() => {
     const currentHour = Math.floor(progressHour); // 0-24
     const pts: { lat: number; lng: number; weight: number; meta: CarparkPoint }[] = [];
 
@@ -211,15 +213,8 @@ export default function HeatmapClient({
       // Use the latest available hour's data for this carpark
       const latestPoint = relevantHours[relevantHours.length - 1];
 
-      // Calculate weight based on selected metric
-      let weight = 0;
-      if (carparkMetric === 'volatility') {
-        // Use standard deviation as volatility measure
-        weight = latestPoint.stddev_vacancy || 0;
-      } else {
-        // Use occupancy rate (0-1, where 1 = fully occupied)
-        weight = latestPoint.occupancy_rate || 0;
-      }
+      // Use standard deviation as volatility measure
+      const weight = latestPoint.stddev_vacancy || 0;
 
       pts.push({
         lat: latestPoint.lat,
@@ -230,9 +225,37 @@ export default function HeatmapClient({
     });
 
     return normalize(pts);
-  }, [carparksByParkId, progressHour, carparkMetric]);
+  }, [carparksByParkId, progressHour]);
 
-  const meteredPayload = useMemo(() => {
+  // Build heatmap payloads with time-based filtering - Occupancy
+  const carparkOccupancyPayload = useMemo(() => {
+    const currentHour = Math.floor(progressHour); // 0-24
+    const pts: { lat: number; lng: number; weight: number; meta: CarparkPoint }[] = [];
+
+    carparksByParkId.forEach((hourlyPoints, parkId) => {
+      // Filter points up to current hour
+      const relevantHours = hourlyPoints.filter((p) => p.hour <= currentHour);
+      if (relevantHours.length === 0) return;
+
+      // Use the latest available hour's data for this carpark
+      const latestPoint = relevantHours[relevantHours.length - 1];
+
+      // Use occupancy rate (0-1, where 1 = fully occupied)
+      const weight = latestPoint.occupancy_rate || 0;
+
+      pts.push({
+        lat: latestPoint.lat,
+        lng: latestPoint.lon,
+        weight,
+        meta: latestPoint
+      });
+    });
+
+    return normalize(pts);
+  }, [carparksByParkId, progressHour]);
+
+  // Metered Carpark Volatility Payload
+  const meteredVolatilityPayload = useMemo(() => {
     const currentHour = Math.floor(progressHour); // 0-24
     const pts: { lat: number; lng: number; weight: number; meta: MeteredCarparkPoint }[] = [];
 
@@ -244,15 +267,8 @@ export default function HeatmapClient({
       // Use the latest available hour's data for this carpark
       const latestPoint = relevantHours[relevantHours.length - 1];
 
-      // Calculate weight based on selected metric
-      let weight = 0;
-      if (carparkMetric === 'volatility') {
-        // Use standard deviation of vacancy rate as volatility measure
-        weight = latestPoint.stddev_vacancy_rate || 0;
-      } else {
-        // Use occupancy rate (0-1, where 1 = fully occupied)
-        weight = latestPoint.occupancy_rate || 0;
-      }
+      // Use standard deviation of vacancy rate as volatility measure
+      const weight = latestPoint.stddev_vacancy_rate || 0;
 
       pts.push({
         lat: latestPoint.lat,
@@ -263,7 +279,34 @@ export default function HeatmapClient({
     });
 
     return normalize(pts);
-  }, [meteredByCarparkId, progressHour, carparkMetric]);
+  }, [meteredByCarparkId, progressHour]);
+
+  // Metered Carpark Occupancy Payload
+  const meteredOccupancyPayload = useMemo(() => {
+    const currentHour = Math.floor(progressHour); // 0-24
+    const pts: { lat: number; lng: number; weight: number; meta: MeteredCarparkPoint }[] = [];
+
+    meteredByCarparkId.forEach((hourlyPoints, carparkId) => {
+      // Filter points up to current hour
+      const relevantHours = hourlyPoints.filter((p) => p.hour <= currentHour);
+      if (relevantHours.length === 0) return;
+
+      // Use the latest available hour's data for this carpark
+      const latestPoint = relevantHours[relevantHours.length - 1];
+
+      // Use occupancy rate (0-1, where 1 = fully occupied)
+      const weight = latestPoint.occupancy_rate || 0;
+
+      pts.push({
+        lat: latestPoint.lat,
+        lng: latestPoint.lon,
+        weight,
+        meta: latestPoint
+      });
+    });
+
+    return normalize(pts);
+  }, [meteredByCarparkId, progressHour]);
 
   const dwellPayload = useMemo(() => {
     const pts = filteredDwells
@@ -287,7 +330,7 @@ export default function HeatmapClient({
     return () => clearInterval(id);
   }, [isPlaying]);
 
-  // Initialize map + heat layer once Google scripts are ready
+  // Initialize map + heat layers once Google scripts are ready
   useEffect(() => {
     if (!ready || typeof window === 'undefined') return;
     const google = (window as any).google;
@@ -297,17 +340,39 @@ export default function HeatmapClient({
       mapRef.current = new google.maps.Map(document.getElementById('heatmap') as HTMLElement, {
         center,
         zoom: 12,
-        tilt: 67.5,
-        heading: 30,
         mapId: process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID,
         disableDefaultUI: true
       });
-      const heatLayer = new google.maps.visualization.HeatmapLayer({
+
+      // Create Volatility heatmap layer with blue gradient
+      const volatilityLayer = new google.maps.visualization.HeatmapLayer({
         dissipating: true,
-        radius: 28
+        radius: 28,
+        gradient: [
+          'rgba(226,232,240,0)',
+          'rgba(148,163,184,0.6)',
+          'rgba(96,165,250,0.8)',
+          'rgba(59,130,246,0.95)',
+          'rgba(30,64,175,1)'
+        ]
       });
-      heatLayer.setMap(mapRef.current);
-      heatRef.current = heatLayer;
+      volatilityLayer.setMap(mapRef.current);
+      volatilityHeatRef.current = volatilityLayer;
+
+      // Create Occupancy heatmap layer with red-yellow gradient
+      const occupancyLayer = new google.maps.visualization.HeatmapLayer({
+        dissipating: true,
+        radius: 28,
+        gradient: [
+          'rgba(226,232,240,0)',
+          'rgba(253,224,71,0.6)',   // yellow
+          'rgba(251,191,36,0.7)',   // amber
+          'rgba(249,115,22,0.85)',  // orange
+          'rgba(239,68,68,1)'       // red
+        ]
+      });
+      occupancyLayer.setMap(mapRef.current);
+      occupancyHeatRef.current = occupancyLayer;
 
       dwellMarkerRef.current = new google.maps.Marker({
         map: mapRef.current,
@@ -349,16 +414,20 @@ export default function HeatmapClient({
         }
         // Initially set empty path - will be updated by progress
         poly.setPath([]);
-        poly.setVisible(true);
+        poly.setVisible(showTrails);
       });
       // hide polylines not in dataset
       movementPolylinesRef.current.forEach((poly, vin) => {
-        if (!seen.has(vin)) poly.setVisible(false);
+        if (!seen.has(vin)) {
+          poly.setVisible(false);
+        } else {
+          poly.setVisible(showTrails);
+        }
       });
     } else {
       movementPolylinesRef.current.forEach((poly) => poly.setVisible(false));
     }
-  }, [ready, mode, movementsByVin]);
+  }, [ready, mode, movementsByVin, showTrails]);
 
   // Update polyline trails based on progress
   useEffect(() => {
@@ -457,71 +526,67 @@ export default function HeatmapClient({
     if (!ready || !mapRef.current) return;
 
     if (mode === 'carparks') {
-      const data = carparkPayload.map((p) => ({
-        location: new google.maps.LatLng(p.lat, p.lng),
-        weight: p.weight
-      }));
-
-      // Set metric-specific gradient
-      if (heatRef.current) {
-        if (carparkMetric === 'volatility') {
-          // Blue gradient for volatility (calm to volatile)
-          heatRef.current.set('gradient', [
-            'rgba(226,232,240,0)',
-            'rgba(148,163,184,0.6)',
-            'rgba(96,165,250,0.8)',
-            'rgba(59,130,246,0.95)',
-            'rgba(30,64,175,1)'
-          ]);
+      // Update volatility layer
+      if (volatilityHeatRef.current) {
+        if (enabledMetrics.volatility) {
+          const data = carparkVolatilityPayload.map((p) => ({
+            location: new google.maps.LatLng(p.lat, p.lng),
+            weight: p.weight
+          }));
+          volatilityHeatRef.current.setData(data as any);
         } else {
-          // Red-yellow gradient for occupancy (empty to full)
-          heatRef.current.set('gradient', [
-            'rgba(226,232,240,0)',
-            'rgba(253,224,71,0.6)',   // yellow
-            'rgba(251,191,36,0.7)',   // amber
-            'rgba(249,115,22,0.85)',  // orange
-            'rgba(239,68,68,1)'       // red
-          ]);
+          volatilityHeatRef.current.setData([] as any);
         }
-        heatRef.current.setData(data as any);
+      }
+
+      // Update occupancy layer
+      if (occupancyHeatRef.current) {
+        if (enabledMetrics.occupancy) {
+          const data = carparkOccupancyPayload.map((p) => ({
+            location: new google.maps.LatLng(p.lat, p.lng),
+            weight: p.weight
+          }));
+          occupancyHeatRef.current.setData(data as any);
+        } else {
+          occupancyHeatRef.current.setData([] as any);
+        }
       }
 
       dwellMarkerRef.current?.setVisible(false);
       movementMarkersRef.current.forEach((m) => m.setVisible(false));
     } else if (mode === 'metered') {
-      const data = meteredPayload.map((p) => ({
-        location: new google.maps.LatLng(p.lat, p.lng),
-        weight: p.weight
-      }));
-
-      // Set metric-specific gradient (same as carparks)
-      if (heatRef.current) {
-        if (carparkMetric === 'volatility') {
-          // Blue gradient for volatility
-          heatRef.current.set('gradient', [
-            'rgba(226,232,240,0)',
-            'rgba(148,163,184,0.6)',
-            'rgba(96,165,250,0.8)',
-            'rgba(59,130,246,0.95)',
-            'rgba(30,64,175,1)'
-          ]);
+      // Update volatility layer
+      if (volatilityHeatRef.current) {
+        if (enabledMetrics.volatility) {
+          const data = meteredVolatilityPayload.map((p) => ({
+            location: new google.maps.LatLng(p.lat, p.lng),
+            weight: p.weight
+          }));
+          volatilityHeatRef.current.setData(data as any);
         } else {
-          // Red-yellow gradient for occupancy
-          heatRef.current.set('gradient', [
-            'rgba(226,232,240,0)',
-            'rgba(253,224,71,0.6)',   // yellow
-            'rgba(251,191,36,0.7)',   // amber
-            'rgba(249,115,22,0.85)',  // orange
-            'rgba(239,68,68,1)'       // red
-          ]);
+          volatilityHeatRef.current.setData([] as any);
         }
-        heatRef.current.setData(data as any);
+      }
+
+      // Update occupancy layer
+      if (occupancyHeatRef.current) {
+        if (enabledMetrics.occupancy) {
+          const data = meteredOccupancyPayload.map((p) => ({
+            location: new google.maps.LatLng(p.lat, p.lng),
+            weight: p.weight
+          }));
+          occupancyHeatRef.current.setData(data as any);
+        } else {
+          occupancyHeatRef.current.setData([] as any);
+        }
       }
 
       dwellMarkerRef.current?.setVisible(false);
       movementMarkersRef.current.forEach((m) => m.setVisible(false));
     } else {
-      heatRef.current?.setData([] as any);
+      // Clear both heatmap layers when in movements mode
+      volatilityHeatRef.current?.setData([] as any);
+      occupancyHeatRef.current?.setData([] as any);
       dwellMarkerRef.current?.setVisible(false);
 
       // Ensure marker per VIN and set up smooth animations
@@ -602,7 +667,7 @@ export default function HeatmapClient({
         hasFitBoundsRef.current = true;
       }
     }
-  }, [ready, mode, carparkPayload, meteredPayload, carparkMetric, activeMovements]);
+  }, [ready, mode, carparkVolatilityPayload, carparkOccupancyPayload, meteredVolatilityPayload, meteredOccupancyPayload, enabledMetrics, activeMovements, isPlaying]);
 
   return (
     <div className="space-y-3">
@@ -638,16 +703,26 @@ export default function HeatmapClient({
         {(mode === 'carparks' || mode === 'metered') && (
           <div className="flex gap-2 rounded-full border border-slate-200 bg-white/80 px-2 py-1 shadow-sm">
             <button
-              onClick={() => setCarparkMetric('volatility')}
-              className={`rounded-full px-3 py-1 text-xs ${carparkMetric === 'volatility' ? 'bg-blue-600 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
+              onClick={() => setEnabledMetrics(m => ({ ...m, volatility: !m.volatility }))}
+              className={`rounded-full px-3 py-1 text-xs transition-colors ${enabledMetrics.volatility ? 'bg-blue-600 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
             >
               Volatility
             </button>
             <button
-              onClick={() => setCarparkMetric('occupancy')}
-              className={`rounded-full px-3 py-1 text-xs ${carparkMetric === 'occupancy' ? 'bg-orange-600 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
+              onClick={() => setEnabledMetrics(m => ({ ...m, occupancy: !m.occupancy }))}
+              className={`rounded-full px-3 py-1 text-xs transition-colors ${enabledMetrics.occupancy ? 'bg-orange-600 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
             >
               Occupancy
+            </button>
+          </div>
+        )}
+        {mode === 'movements' && (
+          <div className="flex gap-2 rounded-full border border-slate-200 bg-white/80 px-2 py-1 shadow-sm">
+            <button
+              onClick={() => setShowTrails(!showTrails)}
+              className={`rounded-full px-3 py-1 text-xs transition-colors ${showTrails ? 'bg-purple-600 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
+            >
+              Trip Trails
             </button>
           </div>
         )}
