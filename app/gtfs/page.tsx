@@ -7,7 +7,7 @@ type ClientRoute = {
   route_short_name: string;
   route_long_name: string;
   route_type: string;
-  route_url?: string | null;
+  route_url?: string;
 };
 
 export const dynamic = 'force-dynamic';
