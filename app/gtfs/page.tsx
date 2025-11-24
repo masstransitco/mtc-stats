@@ -1,11 +1,29 @@
 import GtfsClient from './GtfsClient';
 import { getRouteSummaries } from '@/lib/gtfs';
 
+type ClientRoute = {
+  route_id: string;
+  agency_id: string;
+  route_short_name: string;
+  route_long_name: string;
+  route_type: string;
+  route_url?: string | null;
+};
+
 export const dynamic = 'force-dynamic';
 
 export default async function GtfsPage() {
   const routes = await getRouteSummaries();
-  const sortedRoutes = [...routes].sort((a, b) => (a.route_short_name ?? '').localeCompare(b.route_short_name ?? ''));
+  const sortedRoutes: ClientRoute[] = [...routes]
+    .map((r) => ({
+      route_id: r.route_id,
+      agency_id: r.agency_id ?? '',
+      route_short_name: r.route_short_name ?? '',
+      route_long_name: r.route_long_name ?? '',
+      route_type: r.route_type != null ? String(r.route_type) : '',
+      route_url: r.route_url ?? null
+    }))
+    .sort((a, b) => (a.route_short_name ?? '').localeCompare(b.route_short_name ?? ''));
 
   return (
     <div className="space-y-6">
