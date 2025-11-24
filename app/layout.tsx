@@ -37,6 +37,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               <a className="rounded px-3 py-1 hover:bg-slate-100 hover:text-slate-900" href="/gtfs">
                 GTFS
               </a>
+              <a className="rounded px-3 py-1 hover:bg-slate-100 hover:text-slate-900" href="/api">
+                API
+              </a>
             </nav>
           </div>
         </header>
