@@ -449,7 +449,7 @@ export default function GtfsClient({ routes }: { routes: RouteSummary[] }) {
                         <span className="text-xs text-amber-700">fare {f.fare_id}</span>
                       </div>
                       <div className="flex flex-wrap gap-2 text-xs text-amber-700">
-                        <span>pay: {f.payment_method === '0' ? 'on board' : 'prepaid'}</span>
+                        <span>pay: {f.payment_method === 0 ? 'on board' : 'prepaid'}</span>
                         <span>transfers: {f.transfers}</span>
                         {f.origin_id && <span>origin: {f.origin_id}</span>}
                         {f.destination_id && <span>dest: {f.destination_id}</span>}
