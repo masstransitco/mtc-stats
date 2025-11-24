@@ -21,7 +21,7 @@ export default async function GtfsPage() {
       route_short_name: r.route_short_name ?? '',
       route_long_name: r.route_long_name ?? '',
       route_type: r.route_type != null ? String(r.route_type) : '',
-      route_url: r.route_url ?? null
+      route_url: r.route_url ?? undefined
     }))
     .sort((a, b) => (a.route_short_name ?? '').localeCompare(b.route_short_name ?? ''));
 
