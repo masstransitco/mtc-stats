@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function GtfsPage() {
   const routes = await getRouteSummaries();
-  const sortedRoutes = [...routes].sort((a, b) => a.route_short_name.localeCompare(b.route_short_name));
+  const sortedRoutes = [...routes].sort((a, b) => (a.route_short_name ?? '').localeCompare(b.route_short_name ?? ''));
 
   return (
     <div className="space-y-6">
